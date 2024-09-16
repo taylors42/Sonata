@@ -6,15 +6,18 @@ using Microsoft.EntityFrameworkCore;
 using Sonata.Models;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using ManagedBass;
 namespace Sonata.Views;
 public class MainScreen
 {
     public static void HomeScreen()
     {
         
+        string _selectedItem = " ";
+        string _windowTitle = "Sonata App";
         // creating the window
         Application.Init();
-        var window = new Window("Sonata App");
+        var window = new Window(_windowTitle);
         window.SetDefaultSize(250, 400);
         window.BorderWidth = 10;
         window.DeleteEvent += delegate { Application.Quit(); };
@@ -68,23 +71,52 @@ public class MainScreen
         );
 
         // ! start of music list component
-        var screenMusicList = new Box(Orientation.Vertical, 0);
-        screenMusicList.PackStart(
-            new Label("you are in the music list stack"), 
-            false, 
+        var screenMusicContainer = new Box(Orientation.Vertical, 0);
+        var screenMusicContainerLabel = new Label(_selectedItem);
+        screenMusicContainer.PackStart(
+            screenMusicContainerLabel, 
+            false,
             false, 
             0
         );
 
-        var controlsContainer = new Box(Orientation.Horizontal, 10)
+        var listContainer = new Box(Orientation.Vertical, 0)
         {
             Halign = Align.Center
+        };
+
+        var controlsContainer = new Box(Orientation.Horizontal, 10)
+        {
+            Halign = Align.Center,
+            Valign = Align.End
         };
 
         var playMusicButton = new Button("Play Music");
         playMusicButton.Clicked += (sender, e) =>
         {
-            Console.Beep();
+            if(!Bass.Init())
+            {
+                Console.Beep();
+            }
+            else
+            {
+                using var context = new MusicContext();
+                string musicPath = context.Musics
+                .Where(m => m.Title.Contains(_selectedItem))
+                .FirstOrDefault()
+                .ToString();
+
+                var streamHandle = Bass.CreateStream(musicPath);
+
+                if (streamHandle == 0)
+                {
+
+                }
+                else
+                {
+                    Bass.ChannelPlay(streamHandle);
+                }
+            }
         };
 
         controlsContainer.PackStart(
@@ -98,7 +130,9 @@ public class MainScreen
         var pauseMusicButton = new Button("Pause Music");
         pauseMusicButton.Clicked += (sender, e) =>
         {
-            Console.Beep();
+            // Bass.StreamFree(streamHandle);
+            // Bass.Free();
+            // base.OnDestroyed();
         };
 
         controlsContainer.PackStart(
@@ -109,7 +143,6 @@ public class MainScreen
         );
 
         var deleteMusicButton = new Button("Delete Music");
-
         deleteMusicButton.Clicked += (sender, e) =>
         {
             Console.Beep();
@@ -122,11 +155,11 @@ public class MainScreen
             0
         );
 
-        screenMusicList.PackEnd(
+        screenMusicContainer.PackEnd(
             controlsContainer, 
             false, 
             false, 
-            0
+            20
         );
 
         var musicList = new ListStore(typeof(string));
@@ -144,10 +177,27 @@ public class MainScreen
         column.PackStart(cell, true);
         column.AddAttribute(cell, "text", 0);
         treeView.AppendColumn(column);
-        screenMusicList.PackStart(treeView, true, true, 0);
+        treeView.CursorChanged += (sender, e) =>
+        {
+            TreeView? treeView = sender as TreeView;
+            TreeSelection selection = treeView.Selection;
 
+            if (selection.GetSelected(out TreeIter iter))
+            {
+                _selectedItem = (string)treeView.Model.GetValue(iter, 0);
+                window.Title = (string)treeView.Model.GetValue(iter, 0);
+            }
+        };
+        listContainer.PackStart(treeView, true, true, 0);
+
+        screenMusicContainer.PackEnd(
+            listContainer, 
+            false, 
+            false, 
+            0
+        );
         stack.AddTitled(
-            screenMusicList, "screenmusiclist", "Music Screen"
+            screenMusicContainer, "screenmusiclist", "Music Screen"
         );
         // ! end of music list component
 
